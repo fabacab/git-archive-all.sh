@@ -16,6 +16,7 @@
 
 # DEBUGGING
 set -e
+set -C # noclobber
 
 # TRAP SIGNALS
 trap 'cleanup' QUIT EXIT
@@ -27,16 +28,17 @@ IFS='
  	'
 
 function cleanup () {
-    IFS="$OLD_IFS"
     if [ $FORMAT == 'zip' ]; then
         while read dir_to_clean; do
             if [ -e "$dir_to_clean" ]; then
                 rmdir "$dir_to_clean"
             fi
         done < $TOCLEANFILE
-        rm -f $TOCLEANFILE
     fi
+    rm -f $TOCLEANFILE
     rm -f $TMPFILE
+    rm -f $TOARCHIVE
+    IFS="$OLD_IFS"
 }
 
 function usage () {
@@ -142,35 +144,25 @@ if [ $SEPARATE -eq 1 -a ! -d $OUT_FILE ]; then
 fi
 
 # Create the superproject's git-archive
-git-archive --format=$FORMAT --prefix="$PREFIX" $TREEISH > "$TMPDIR"/$(basename $(pwd)).$FORMAT
-echo "$TMPDIR/$(basename $(pwd)).$FORMAT" >> $TMPFILE
+git-archive --format=$FORMAT --prefix="$PREFIX" $TREEISH > $TMPDIR/$(basename $(pwd)).$FORMAT
+echo $TMPDIR/$(basename $(pwd)).$FORMAT >| $TMPFILE # clobber on purpose
 superfile=`head -n 1 $TMPFILE`
 
-# Create the git-archive for each submodule
-grep 'path = ' .gitmodules | awk '{print $3}' | \
+# find all '.git' dirs, these show us the remaining to-be-archived dirs
+TOARCHIVE=`mktemp "$TMPDIR/$PROGRAM.toarchive.XXXXXX"`
+find . -name '.git' -type d -print | sed -e 's/^\.\///' -e 's/\.git$//' | grep -v '^$' >> $TOARCHIVE
+
 while read path; do
     cd "$path"
-    git-archive --format=$FORMAT --prefix="$path/" $TREEISH > "$TMPDIR"/`basename "$path"`.$FORMAT
-
+    git-archive --format=$FORMAT --prefix="${PREFIX}$path" $TREEISH > "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
     # we need to move the zip files around a bit so they will unzip cleanly
     if [ $FORMAT == 'zip' ]; then
-        mkdir -p "$TMPDIR/`dirname "$path"`"
-        echo "$TMPDIR/`dirname "$path"`" >> $TOCLEANFILE
-        mv "$TMPDIR/`basename "$path"`.$FORMAT" "$TMPDIR/`dirname "$path"`"
-        # record the moved spot for zip files
-        echo "$TMPDIR/`dirname "$path"`/`basename "$path"`.$FORMAT" >> $TMPFILE
-        # and delete the empty directory entry; zipped submodules won't unzip if we don't do this
-        zip -d "$superfile" "${PREFIX}$path" >/dev/null
-    else
-        # record the normal spot for other formats
-        echo "$TMPDIR/`basename "$path"`.$FORMAT" >> $TMPFILE
+        # delete the empty directory entry; zipped submodules won't unzip if we don't do this
+        zip -d "$(tail -n 1 $TMPFILE)" "${PREFIX}${path%/}" >/dev/null # remove trailing '/'
     fi
-
-    if [ -f ".gitmodules" ]; then # recurse
-        "$PROGRAM_INVOCATION" --format "$FORMAT" --prefix "${PREFIX}$path/" $TREEISH
-    fi
+    echo "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT >> $TMPFILE
     cd "$OLD_PWD"
-done
+done < $TOARCHIVE
 
 # Concatenate archives into a super-archive.
 if [ $SEPARATE -eq 0 ]; then
@@ -187,9 +179,9 @@ if [ $SEPARATE -eq 0 ]; then
         cd "$OLD_PWD"
     fi
 
-    echo "$superfile" > $TMPFILE
+    echo "$superfile" >| $TMPFILE # clobber on purpose
 fi
 
-cat $TMPFILE | while read file; do
+while read file; do
     mv "$file" "$OUT_FILE"
-done
+done < $TMPFILE
