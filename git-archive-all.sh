@@ -68,7 +68,6 @@ function version () {
 
 # Internal variables and initializations.
 readonly PROGRAM=`basename "$0"`
-readonly PROGRAM_INVOCATION="$0" # for recursion in case $PROGRAM is not in $PATH
 readonly VERSION=0.2
 
 OLD_PWD="`pwd`"
