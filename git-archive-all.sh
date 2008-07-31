@@ -45,6 +45,9 @@ function usage () {
     echo "$PROGRAM <--version>"
     echo "    Prints the program version number on a line by itself and exits."
     echo
+    echo "$PROGRAM <--usage|--help|-?>"
+    echo "    Prints this usage output and exits."
+    echo
     echo "$PROGRAM [--format <fmt>] [--prefix <path>] [--separate|-s] [output_file]"
     echo "    Creates an archive for the entire git superproject, and its submodules"
     echo "    using the passed parameters, described below."
@@ -114,6 +117,11 @@ while test $# -gt 0; do
 
         --version )
             version
+            exit
+            ;;
+
+        -? | --usage | --help )
+            usage
             exit
             ;;
 
