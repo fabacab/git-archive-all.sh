@@ -2,13 +2,13 @@
 #
 # File:        git-archive-all.sh
 #
-# Description: A utility script that builds a single tarfile of all
+# Description: A utility script that builds an archive file(s) of all
 #              git repositories and submodules in the current path.
 #              Useful for creating a single tarfile of a git super-
 #              project that contains other submodules.
 #
-# Examples:    Use git-archive-all.sh to create tarfile distributions
-#              from git archives. To use, simply do:
+# Examples:    Use git-archive-all.sh to create archive distributions
+#              from git repositories. To use, simply do:
 #
 #                  cd $GIT_DIR; git-archive-all.sh
 #
@@ -16,6 +16,7 @@
 
 # DEBUGGING
 set -e
+set -C # noclobber
 
 # TRAP SIGNALS
 trap 'cleanup' QUIT EXIT
@@ -27,16 +28,9 @@ IFS='
  	'
 
 function cleanup () {
-    IFS="$OLD_IFS"
-    if [ $FORMAT == 'zip' ]; then
-        while read dir_to_clean; do
-            if [ -e "$dir_to_clean" ]; then
-                rmdir "$dir_to_clean"
-            fi
-        done < $TOCLEANFILE
-        rm -f $TOCLEANFILE
-    fi
     rm -f $TMPFILE
+    rm -f $TOARCHIVE
+    IFS="$OLD_IFS"
 }
 
 function usage () {
@@ -67,8 +61,8 @@ function usage () {
     echo "    file named. This parameter is essentially a path that must be writeable."
     echo "    When combined with '--separate' ('-s') this path must refer to a directory."
     echo "    Without this parameter or when combined with '--separate' the resulting"
-    echo "    archive(s) are named with the basename of the archived directory and a"
-    echo "    file extension equal to their format (for instance, 'superproject.tar')."
+    echo "    archive(s) are named with a dot-separated path of the archived directory and"
+    echo "    a file extension equal to their format (e.g., 'superdir.submodule1dir.tar')."
 }
 
 function version () {
@@ -77,13 +71,12 @@ function version () {
 
 # Internal variables and initializations.
 readonly PROGRAM=`basename "$0"`
-readonly PROGRAM_INVOCATION="$0" # for recursion in case $PROGRAM is not in $PATH
-readonly VERSION=0.1.1
+readonly VERSION=0.2
 
 OLD_PWD="`pwd`"
 TMPDIR=${TMPDIR:-/tmp}
-TMPFILE=`mktemp $TMPDIR/$PROGRAM.XXXXXX` # Create a place to store our work's progress
-TOCLEANFILE=`mktemp $TMPDIR/$PROGRAM.to_clean.XXXXXX` # Create a place to store what we need to clean
+TMPFILE=`mktemp "$TMPDIR/$PROGRAM.XXXXXX"` # Create a place to store our work's progress
+TOARCHIVE=`mktemp "$TMPDIR/$PROGRAM.toarchive.XXXXXX"`
 OUT_FILE=$OLD_PWD # assume "this directory" without a name change by default
 SEPARATE=0
 
@@ -147,38 +140,29 @@ if [ $SEPARATE -eq 1 -a ! -d $OUT_FILE ]; then
     echo "When creating multiple archives, your destination must be a directory."
     echo "If it's not, you risk being surprised when your files are overwritten."
     exit
+elif [ `git config -l | grep -q '^core\.bare=false'; echo $?` -ne 0 ]; then
+    echo "$PROGRAM must be run from a git working copy (i.e., not a bare repository)."
+    exit
 fi
 
 # Create the superproject's git-archive
-git-archive --format=$FORMAT --prefix="$PREFIX" $TREEISH > "$TMPDIR"/$(basename $(pwd)).$FORMAT
-echo "$TMPDIR/$(basename $(pwd)).$FORMAT" >> $TMPFILE
+git-archive --format=$FORMAT --prefix="$PREFIX" $TREEISH > $TMPDIR/$(basename $(pwd)).$FORMAT
+echo $TMPDIR/$(basename $(pwd)).$FORMAT >| $TMPFILE # clobber on purpose
 superfile=`head -n 1 $TMPFILE`
 
-# Create the git-archive for each submodule
-grep 'path = ' .gitmodules | awk '{print $3}' | \
+# find all '.git' dirs, these show us the remaining to-be-archived dirs
+find . -name '.git' -type d -print | sed -e 's/^\.\///' -e 's/\.git$//' | grep -v '^$' >> $TOARCHIVE
+
 while read path; do
     cd "$path"
-    git-archive --format=$FORMAT --prefix="$path/" $TREEISH > "$TMPDIR"/`basename "$path"`.$FORMAT
-
-    # we need to move the zip files around a bit so they will unzip cleanly
+    git-archive --format=$FORMAT --prefix="${PREFIX}$path" $TREEISH > "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
     if [ $FORMAT == 'zip' ]; then
-        mkdir -p "$TMPDIR/`dirname "$path"`"
-        echo "$TMPDIR/`dirname "$path"`" >> $TOCLEANFILE
-        mv "$TMPDIR/`basename "$path"`.$FORMAT" "$TMPDIR/`dirname "$path"`"
-        # record the moved spot for zip files
-        echo "$TMPDIR/`dirname "$path"`/`basename "$path"`.$FORMAT" >> $TMPFILE
-        # and delete the empty directory entry; zipped submodules won't unzip if we don't do this
-        zip -d "$superfile" "${PREFIX}$path" >/dev/null
-    else
-        # record the normal spot for other formats
-        echo "$TMPDIR/`basename "$path"`.$FORMAT" >> $TMPFILE
+        # delete the empty directory entry; zipped submodules won't unzip if we don't do this
+        zip -d "$(tail -n 1 $TMPFILE)" "${PREFIX}${path%/}" >/dev/null # remove trailing '/'
     fi
-
-    if [ -f ".gitmodules" ]; then # recurse
-        "$PROGRAM_INVOCATION" --format "$FORMAT" --prefix "${PREFIX}$path/" $TREEISH
-    fi
+    echo "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT >> $TMPFILE
     cd "$OLD_PWD"
-done
+done < $TOARCHIVE
 
 # Concatenate archives into a super-archive.
 if [ $SEPARATE -eq 0 ]; then
@@ -195,9 +179,9 @@ if [ $SEPARATE -eq 0 ]; then
         cd "$OLD_PWD"
     fi
 
-    echo "$superfile" > $TMPFILE
+    echo "$superfile" >| $TMPFILE # clobber on purpose
 fi
 
-cat $TMPFILE | while read file; do
+while read file; do
     mv "$file" "$OUT_FILE"
-done
+done < $TMPFILE
