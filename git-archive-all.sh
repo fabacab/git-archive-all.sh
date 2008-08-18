@@ -154,8 +154,9 @@ superfile=`head -n 1 $TMPFILE`
 find . -name '.git' -type d -print | sed -e 's/^\.\///' -e 's/\.git$//' | grep -v '^$' >> $TOARCHIVE
 
 while read path; do
+    TREEISH=$(git-submodule | grep "^ .*${path%/}" | cut -d ' ' -f 2) # git-submodule does not list trailing slashes in $path
     cd "$path"
-    git-archive --format=$FORMAT --prefix="${PREFIX}$path" $TREEISH > "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
+    git-archive --format=$FORMAT --prefix="${PREFIX}$path" ${TREEISH:-HEAD} > "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
     if [ $FORMAT == 'zip' ]; then
         # delete the empty directory entry; zipped submodules won't unzip if we don't do this
         zip -d "$(tail -n 1 $TMPFILE)" "${PREFIX}${path%/}" >/dev/null # remove trailing '/'
