@@ -101,7 +101,6 @@ TMPDIR=${TMPDIR:-/tmp}
 TMPFILE=`mktemp "$TMPDIR/$PROGRAM.XXXXXX"` # Create a place to store our work's progress
 TOARCHIVE=`mktemp "$TMPDIR/$PROGRAM.toarchive.XXXXXX"`
 OUT_FILE=$OLD_PWD # assume "this directory" without a name change by default
-WORKTREE_ATTRIBUTES=0
 SEPARATE=0
 
 FORMAT=tar
@@ -129,8 +128,8 @@ while test $# -gt 0; do
             ;;
 
         --worktree-attributes )
+            ARCHIVE_OPTS+=" $1"
             shift
-            WORKTREE_ATTRIBUTES=1
             ;;
 
         --separate | -s )
@@ -173,10 +172,6 @@ if [ $SEPARATE -eq 1 -a ! -d $OUT_FILE ]; then
 elif [ `git config -l | grep -q '^core\.bare=false'; echo $?` -ne 0 ]; then
     echo "$PROGRAM must be run from a git working copy (i.e., not a bare repository)."
     exit
-fi
-
-if [ $WORKTREE_ATTRIBUTES -eq 1 ]; then
-    ARCHIVE_OPTS=--worktree-attributes
 fi
 
 # Create the superproject's git-archive
