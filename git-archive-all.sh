@@ -103,6 +103,8 @@ OUT_FILE=$OLD_PWD # assume "this directory" without a name change by default
 SEPARATE=0
 VERBOSE=0
 
+TARCMD=tar
+[[ $(uname) == "Darwin" ]] && TARCMD=gnutar
 FORMAT=tar
 PREFIX=
 TREEISH=HEAD
@@ -227,7 +229,7 @@ fi
 if [ $SEPARATE -eq 0 ]; then
     if [ $FORMAT == 'tar' ]; then
         sed -e '1d' $TMPFILE | while read file; do
-            tar --concatenate -f "$superfile" "$file" && rm -f "$file"
+            $TARCMD --concatenate -f "$superfile" "$file" && rm -f "$file"
         done
     elif [ $FORMAT == 'zip' ]; then
         sed -e '1d' $TMPFILE | while read file; do
