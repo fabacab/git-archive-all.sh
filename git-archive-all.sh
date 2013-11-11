@@ -97,8 +97,14 @@ readonly VERSION=0.2
 
 OLD_PWD="`pwd`"
 TMPDIR=${TMPDIR:-/tmp}
-TMPFILE="$TMPDIR/$PROGRAM.$RANDOM" # Create a place to store our work's progress
-TOARCHIVE="$TMPDIR/$PROGRAM.toarchive.$RANDOM"
+# Create a place to store our work's progress
+command -v mktemp >/dev/null && { 
+    TMPFILE=`mktemp "$TMPDIR/$PROGRAM.XXXXXX"`; 
+	TOARCHIVE=`mktemp "$TMPDIR/$PROGRAM.toarchive.XXXXXX"`; 
+} || { 
+	TMPFILE="$TMPDIR/$PROGRAM.$RANDOM"; 
+	TOARCHIVE="$TMPDIR/$PROGRAM.toarchive.$RANDOM"; 
+}
 OUT_FILE=$OLD_PWD # assume "this directory" without a name change by default
 SEPARATE=0
 VERBOSE=0
