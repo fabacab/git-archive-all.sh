@@ -92,7 +92,8 @@ function version () {
 }
 
 # Internal variables and initializations.
-readonly PROGRAM=`basename "$0"`
+DOLLAR0=$(echo "$0" | sed -e 's/\\/\//g')
+readonly PROGRAM=`basename "$DOLLAR0"`
 readonly VERSION=0.2
 
 OLD_PWD="`pwd`"
