@@ -77,6 +77,11 @@ function usage () {
     echo "    for each of the superproject itself and its submodules. The default is to"
     echo "    concatenate individual archives into one larger archive."
     echo
+    echo "    If '--tree-ish' is specified, the archive will be created based on whatever"
+    echo "    you define the tree-ish to be. Branch names, commit hash, etc. are acceptable."
+    echo "    Defaults to HEAD if not specified. See git archive's documentation for more"
+    echo "    information on what a tree-ish is."
+    echo
     echo "    If 'output_file' is specified, the resulting archive is created as the"
     echo "    file named. This parameter is essentially a path that must be writeable."
     echo "    When combined with '--separate' ('-s') this path must refer to a directory."
@@ -131,6 +136,12 @@ while test $# -gt 0; do
         --separate | -s )
             shift
             SEPARATE=1
+            ;;
+
+        --tree-ish | -t )
+            shift
+            TREEISH="$1"
+            shift
             ;;
 
         --version )
