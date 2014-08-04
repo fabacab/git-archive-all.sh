@@ -238,7 +238,17 @@ if [ $VERBOSE -eq 1 ]; then
 fi
 # Concatenate archives into a super-archive.
 if [ $SEPARATE -eq 0 ]; then
-    if [ $FORMAT == 'tar' ]; then
+    if [ $FORMAT == 'tar.gz' ]; then
+        gunzip $superfile
+        superfile=${superfile:0: -3}
+        sed -e '1d' $TMPFILE | while read file; do
+            gunzip $file
+            file=${file:0: -3}
+            $TARCMD --concatenate -f "$superfile" "$file" && rm -f "$file"
+        done
+        gzip $superfile
+        superfile=$superfile.gz
+    elif [ $FORMAT == 'tar' ]; then
         sed -e '1d' $TMPFILE | while read file; do
             $TARCMD --concatenate -f "$superfile" "$file" && rm -f "$file"
         done
