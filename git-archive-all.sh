@@ -62,7 +62,8 @@ function usage () {
     echo "$PROGRAM <--usage|--help|-?>"
     echo "    Prints this usage output and exits."
     echo
-    echo "$PROGRAM [--format <fmt>] [--prefix <path>] [--verbose|-v] [--separate|-s] [output_file]"
+    echo "$PROGRAM [--format <fmt>] [--prefix <path>] [--verbose|-v] [--separate|-s]"
+    echo "         [--tree-ish|-t <tree-ish>] [output_file]"
     echo "    Creates an archive for the entire git superproject, and its submodules"
     echo "    using the passed parameters, described below."
     echo
