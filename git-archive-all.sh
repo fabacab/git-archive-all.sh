@@ -107,11 +107,6 @@ function version () {
 readonly PROGRAM=`basename "$0"`
 readonly VERSION=0.3
 
-OLD_PWD="`pwd`"
-TMPDIR=${TMPDIR:-/tmp}
-TMPFILE=`mktemp "$TMPDIR/$PROGRAM.XXXXXX"` # Create a place to store our work's progress
-TOARCHIVE=`mktemp "$TMPDIR/$PROGRAM.toarchive.XXXXXX"`
-OUT_FILE=$OLD_PWD # assume "this directory" without a name change by default
 SEPARATE=0
 VERBOSE=0
 
@@ -181,6 +176,12 @@ while test $# -gt 0; do
             ;;
     esac
 done
+
+OLD_PWD="`pwd`"
+TMPDIR=${TMPDIR:-/tmp}
+TMPFILE=`mktemp "$TMPDIR/$PROGRAM.XXXXXX"` # Create a place to store our work's progress
+TOARCHIVE=`mktemp "$TMPDIR/$PROGRAM.toarchive.XXXXXX"`
+OUT_FILE=$OLD_PWD # assume "this directory" without a name change by default
 
 if [ ! -z "$1" ]; then
     OUT_FILE="$1"
