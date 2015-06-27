@@ -109,8 +109,7 @@ OUT_FILE=$OLD_PWD # assume "this directory" without a name change by default
 SEPARATE=0
 VERBOSE=0
 
-TARCMD=tar
-[[ $(uname) == "Darwin" ]] && TARCMD=gnutar
+TARCMD=`command -v gnutar || command -v tar`
 FORMAT=tar
 PREFIX=
 TREEISH=HEAD
@@ -178,7 +177,12 @@ if [ ! -z "$1" ]; then
 fi
 
 # Validate parameters; error early, error often.
-if [ $SEPARATE -eq 1 -a ! -d $OUT_FILE ]; then
+if [ $SEPARATE -ne 1 -a "$FORMAT" == "tar" -a `$TARCMD --help | grep -q -- "--concatenate"; echo $?` -ne 0 ]; then
+    echo "Your 'tar' does not support the '--concatenate' option, which we need"
+    echo "to produce a single tarfile. Either install a compatible tar (such as"
+    echo "gnutar), or invoke $PROGRAM with the '--separate' option."
+    exit
+elif [ $SEPARATE -eq 1 -a ! -d $OUT_FILE ]; then
     echo "When creating multiple archives, your destination must be a directory."
     echo "If it's not, you risk being surprised when your files are overwritten."
     exit
