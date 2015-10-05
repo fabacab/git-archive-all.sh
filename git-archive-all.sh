@@ -14,7 +14,7 @@
 #
 #              where $GIT_DIR is the root of your git superproject.
 #
-# License:     GPL3
+# License:     GPL2+
 #
 ###############################################################################
 #
