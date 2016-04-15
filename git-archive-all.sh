@@ -44,8 +44,7 @@ trap 'cleanup' QUIT EXIT
 # For security reasons, explicitly set the internal field separator
 # to newline, space, tab
 OLD_IFS=$IFS
-IFS='
- 	'
+IFS="\n \t"
 
 function cleanup () {
     rm -f $TMPFILE
@@ -63,7 +62,7 @@ function usage () {
     echo "    Prints this usage output and exits."
     echo
     echo "$PROGRAM [--format <fmt>] [--prefix <path>] [--verbose|-v] [--separate|-s]"
-    echo "         [--tree-ish|-t <tree-ish>] [output_file]"
+    echo "         [--worktree-attributes] [--tree-ish|-t <tree-ish>] [output_file]"
     echo "    Creates an archive for the entire git superproject, and its submodules"
     echo "    using the passed parameters, described below."
     echo
@@ -73,6 +72,9 @@ function usage () {
     echo
     echo "    If '--prefix' is specified, the archive's superproject and all submodules"
     echo "    are created with the <path> prefix named. The default is to not use one."
+    echo
+    echo "    If '--worktree-attributes' is specified, the invidual archive commands will"
+    echo "    look for attributes in .gitattributes in the working directory too."
     echo
     echo "    If '--separate' or '-s' is specified, individual archives will be created"
     echo "    for each of the superproject itself and its submodules. The default is to"
@@ -114,6 +116,7 @@ TARCMD=`command -v gnutar || command -v tar`
 FORMAT=tar
 PREFIX=
 TREEISH=HEAD
+ARCHIVE_OPTS=
 
 # RETURN VALUES/EXIT STATUS CODES
 readonly E_BAD_OPTION=254
@@ -136,6 +139,11 @@ while test $# -gt 0; do
         --prefix )
             shift
             PREFIX="$1"
+            shift
+            ;;
+
+        --worktree-attributes )
+            ARCHIVE_OPTS+=" $1"
             shift
             ;;
 
@@ -210,7 +218,7 @@ fi
 if [ $VERBOSE -eq 1 ]; then
     echo -n "creating superproject archive..."
 fi
-git archive --format=$FORMAT --prefix="$PREFIX" $TREEISH > $TMPDIR/$(basename "$(pwd)").$FORMAT
+git archive --format=$FORMAT --prefix="$PREFIX" $ARCHIVE_OPTS $TREEISH > $TMPDIR/$(basename "$(pwd)").$FORMAT
 if [ $VERBOSE -eq 1 ]; then
     echo "done"
 fi
@@ -241,7 +249,7 @@ fi
 while read path; do
     TREEISH=$(git submodule | grep "^ .*${path%/} " | cut -d ' ' -f 2) # git submodule does not list trailing slashes in $path
     cd "$path"
-    git archive --format=$FORMAT --prefix="${PREFIX}$path" ${TREEISH:-HEAD} > "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
+    git archive --format=$FORMAT --prefix="${PREFIX}$path" $ARCHIVE_OPTS ${TREEISH:-HEAD} > "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
     if [ $FORMAT == 'zip' ]; then
         # delete the empty directory entry; zipped submodules won't unzip if we don't do this
         zip -d "$(tail -n 1 $TMPFILE)" "${PREFIX}${path%/}" >/dev/null # remove trailing '/'
