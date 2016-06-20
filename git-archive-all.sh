@@ -193,19 +193,19 @@ OUT_FILE=$OLD_PWD # assume "this directory" without a name change by default
 
 if [ ! -z "$1" ]; then
     OUT_FILE="$1"
-    if [ "-" == $OUT_FILE ]; then
+    if [ "-" == "$OUT_FILE" ]; then
         SEPARATE=0
     fi
     shift
 fi
 
 # Validate parameters; error early, error often.
-if [ "-" == $OUT_FILE -o $SEPARATE -ne 1 ] && [ "$FORMAT" == "tar" -a `$TARCMD --help | grep -q -- "--concatenate"; echo $?` -ne 0 ]; then
+if [ "-" == "$OUT_FILE" -o $SEPARATE -ne 1 ] && [ "$FORMAT" == "tar" -a `$TARCMD --help | grep -q -- "--concatenate"; echo $?` -ne 0 ]; then
     echo "Your 'tar' does not support the '--concatenate' option, which we need"
     echo "to produce a single tarfile. Either install a compatible tar (such as"
     echo "gnutar), or invoke $PROGRAM with the '--separate' option."
     exit
-elif [ $SEPARATE -eq 1 -a ! -d $OUT_FILE ]; then
+elif [ $SEPARATE -eq 1 -a ! -d "$OUT_FILE" ]; then
     echo "When creating multiple archives, your destination must be a directory."
     echo "If it's not, you risk being surprised when your files are overwritten."
     exit
@@ -265,7 +265,7 @@ if [ $VERBOSE -eq 1 ]; then
     echo -n "concatenating archives into single archive..."
 fi
 # Concatenate archives into a super-archive.
-if [ $SEPARATE -eq 0 -o "-" == $OUT_FILE ]; then
+if [ $SEPARATE -eq 0 -o "-" == "$OUT_FILE" ]; then
     if [ $FORMAT == 'tar.gz' ]; then
         gunzip $superfile
         superfile=${superfile:0: -3} # Remove '.gz'
@@ -299,7 +299,7 @@ if [ $VERBOSE -eq 1 ]; then
     echo -n "moving archive to $OUT_FILE..."
 fi
 while read file; do
-    if [ "-" == $OUT_FILE ]; then
+    if [ "-" == "$OUT_FILE" ]; then
         cat "$file" && rm -f "$file"
     else
         mv "$file" "$OUT_FILE"
