@@ -44,7 +44,7 @@ trap 'cleanup' QUIT EXIT
 # For security reasons, explicitly set the internal field separator
 # to newline, space, tab
 OLD_IFS=$IFS
-IFS="\n \t"
+IFS="$(printf '\n \t')"
 
 function cleanup () {
     rm -f $TMPFILE
