@@ -209,7 +209,7 @@ elif [ $SEPARATE -eq 1 -a ! -d "$OUT_FILE" ]; then
     echo "When creating multiple archives, your destination must be a directory."
     echo "If it's not, you risk being surprised when your files are overwritten."
     exit
-elif [ `git config -l | grep -q '^core\.bare=false'; echo $?` -ne 0 ]; then
+elif [ `git config -l | grep -q '^core\.bare=true'; echo $?` -eq 0 ]; then
     echo "$PROGRAM must be run from a git working copy (i.e., not a bare repository)."
     exit
 fi
