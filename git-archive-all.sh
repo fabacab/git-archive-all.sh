@@ -48,6 +48,7 @@ IFS="$(printf '\n \t')"
 
 function cleanup () {
     rm -f $TMPFILE
+    rm -f $TMPLIST
     rm -f $TOARCHIVE
     IFS="$OLD_IFS"
 }
@@ -188,6 +189,7 @@ done
 OLD_PWD="`pwd`"
 TMPDIR=${TMPDIR:-/tmp}
 TMPFILE=`mktemp "$TMPDIR/$PROGRAM.XXXXXX"` # Create a place to store our work's progress
+TMPLIST=`mktemp "$TMPDIR/$PROGRAM.submodules.XXXXXX"`
 TOARCHIVE=`mktemp "$TMPDIR/$PROGRAM.toarchive.XXXXXX"`
 OUT_FILE=$OLD_PWD # assume "this directory" without a name change by default
 
@@ -246,8 +248,9 @@ fi
 if [ $VERBOSE -eq 1 ]; then
     echo -n "archiving submodules..."
 fi
+git submodule >>"$TMPLIST"
 while read path; do
-    TREEISH=$(git submodule | grep "^ .*${path%/} " | cut -d ' ' -f 2) # git submodule does not list trailing slashes in $path
+    TREEISH=$(grep "^ .*${path%/} " "$TMPLIST" | cut -d ' ' -f 2) # git submodule does not list trailing slashes in $path
     cd "$path"
     git archive --format=$FORMAT --prefix="${PREFIX}$path" $ARCHIVE_OPTS ${TREEISH:-HEAD} > "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
     if [ $FORMAT == 'zip' ]; then
