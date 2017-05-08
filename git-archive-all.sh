@@ -113,7 +113,7 @@ readonly VERSION=0.3
 SEPARATE=0
 VERBOSE=0
 
-TARCMD=`command -v gnutar || command -v tar`
+TARCMD=`command -v gtar || command -v gnutar || command -v tar`
 FORMAT=tar
 PREFIX=
 TREEISH=HEAD
