@@ -35,7 +35,7 @@
 ###############################################################################
 
 # DEBUGGING
-set -e
+set -e # Exit on error (i.e., "be strict").
 set -C # noclobber
 
 # TRAP SIGNALS
@@ -220,6 +220,7 @@ fi
 if [ $VERBOSE -eq 1 ]; then
     echo -n "creating superproject archive..."
 fi
+rm -f $TMPDIR/$(basename "$(pwd)").$FORMAT
 git archive --format=$FORMAT --prefix="$PREFIX" $ARCHIVE_OPTS $TREEISH > $TMPDIR/$(basename "$(pwd)").$FORMAT
 if [ $VERBOSE -eq 1 ]; then
     echo "done"
@@ -252,10 +253,11 @@ git submodule >>"$TMPLIST"
 while read path; do
     TREEISH=$(grep "^ .*${path%/} " "$TMPLIST" | cut -d ' ' -f 2) # git submodule does not list trailing slashes in $path
     cd "$path"
+    rm -f "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
     git archive --format=$FORMAT --prefix="${PREFIX}$path" $ARCHIVE_OPTS ${TREEISH:-HEAD} > "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
     if [ $FORMAT == 'zip' ]; then
         # delete the empty directory entry; zipped submodules won't unzip if we don't do this
-        zip -d "$(tail -n 1 $TMPFILE)" "${PREFIX}${path%/}" >/dev/null # remove trailing '/'
+        zip -d "$(tail -n 1 $TMPFILE)" "${PREFIX}${path%/}" >/dev/null 2>&1 || true # remove trailing '/'
     fi
     echo "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT >> $TMPFILE
     cd "$OLD_PWD"
