@@ -49,6 +49,7 @@ IFS="$(printf '\n \t')"
 function cleanup () {
     rm -f $TMPFILE
     rm -f $TMPLIST
+    rm -rf $TMP_UNPACK_FOLDER
     rm -f $TOARCHIVE
     IFS="$OLD_IFS"
 }
@@ -190,6 +191,7 @@ OLD_PWD="`pwd`"
 TMPDIR=${TMPDIR:-/tmp}
 TMPFILE=`mktemp "$TMPDIR/$PROGRAM.XXXXXX"` # Create a place to store our work's progress
 TMPLIST=`mktemp "$TMPDIR/$PROGRAM.submodules.XXXXXX"`
+TMP_UNPACK_FOLDER=`mktemp -d "$TMPDIR/$PROGRAM.tmp_unpack_folder.XXXXXX"`
 TOARCHIVE=`mktemp "$TMPDIR/$PROGRAM.toarchive.XXXXXX"`
 OUT_FILE=$OLD_PWD # assume "this directory" without a name change by default
 
@@ -225,6 +227,7 @@ git archive --format=$FORMAT --prefix="$PREFIX" $ARCHIVE_OPTS $TREEISH > $TMPDIR
 if [ $VERBOSE -eq 1 ]; then
     echo "done"
 fi
+
 echo $TMPDIR/$(basename "$(pwd)").$FORMAT >| $TMPFILE # clobber on purpose
 superfile=`head -n 1 $TMPFILE`
 
@@ -249,21 +252,30 @@ fi
 if [ $VERBOSE -eq 1 ]; then
     echo -n "archiving submodules..."
 fi
-git submodule >>"$TMPLIST"
-while read path; do
-    TREEISH=$(grep "^ .*${path%/} " "$TMPLIST" | cut -d ' ' -f 2) # git submodule does not list trailing slashes in $path
-    cd "$path"
-    rm -f "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
-    git archive --format=$FORMAT --prefix="${PREFIX}$path" $ARCHIVE_OPTS ${TREEISH:-HEAD} > "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
-    if [ $FORMAT == 'zip' ]; then
-        # delete the empty directory entry; zipped submodules won't unzip if we don't do this
-        zip -d "$(tail -n 1 $TMPFILE)" "${PREFIX}${path%/}" >/dev/null 2>&1 || true # remove trailing '/'
+
+SUBMODULES_LIST=`git submodule`
+if [ -z "$SUBMODULES_LIST" ]; then
+    `rm $TMPLIST`
+    if [ $VERBOSE -eq 1 ]; then
+        echo "no submodules found"
     fi
-    echo "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT >> $TMPFILE
-    cd "$OLD_PWD"
-done < $TOARCHIVE
-if [ $VERBOSE -eq 1 ]; then
-    echo "done"
+else
+    git submodule >>"$TMPLIST"
+    while read path; do
+        TREEISH=$(grep "^ .*${path%/} " "$TMPLIST" | cut -d ' ' -f 2) # git submodule does not list trailing slashes in $path
+        cd "$path"
+        rm -f "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
+        git archive --format=$FORMAT --prefix="${PREFIX}$path" $ARCHIVE_OPTS ${TREEISH:-HEAD} > "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
+        if [ $FORMAT == 'zip' ]; then
+            # delete the empty directory entry; zipped submodules won't unzip if we don't do this
+            zip -d "$(tail -n 1 $TMPFILE)" "${PREFIX}${path%/}" >/dev/null 2>&1 || true # remove trailing '/'
+        fi
+        echo "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT >> $TMPFILE
+        cd "$OLD_PWD"
+    done < $TOARCHIVE
+    if [ $VERBOSE -eq 1 ]; then
+        echo "done"
+    fi
 fi
 
 if [ $VERBOSE -eq 1 ]; then
@@ -286,12 +298,25 @@ if [ $SEPARATE -eq 0 -o "-" == "$OUT_FILE" ]; then
             $TARCMD --concatenate -f "$superfile" "$file" && rm -f "$file"
         done
     elif [ $FORMAT == 'zip' ]; then
+        # unpack all zip files, then re-pack
+        # unfortunately, more intelligent options don't work:
+        # zipmerge is broken (kills the x bit of directories), and zip --grow does not unpack input zipfiles.
+        cd $TMP_UNPACK_FOLDER
+
         sed -e '1d' $TMPFILE | while read file; do
-            # zip incorrectly stores the full path, so cd and then grow
-            cd `dirname "$file"`
-            zip -g "$superfile" `basename "$file"` && rm -f "$file"
+            unzip -q "$file" && rm -f "$file"
         done
-        cd "$OLD_PWD"
+
+        if [ -z "$(ls -A .)" ]; then
+           if [ $VERBOSE -eq 1 ]; then
+                echo "No zip update needed"
+            fi
+        else
+            if [ $VERBOSE -eq 1 ]; then
+                echo "Updating zip file"
+            fi
+            zip --quiet --recurse-paths "$superfile" .
+        fi
     fi
 
     echo "$superfile" >| $TMPFILE # clobber on purpose
