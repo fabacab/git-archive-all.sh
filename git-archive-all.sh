@@ -47,9 +47,7 @@ OLD_IFS=$IFS
 IFS="$(printf '\n \t')"
 
 function cleanup () {
-    rm -f $TMPFILE
-    rm -f $TMPLIST
-    rm -f $TOARCHIVE
+    rm -rf $MYTMPDIR
     IFS="$OLD_IFS"
 }
 
@@ -188,8 +186,11 @@ done
 
 OLD_PWD="`pwd`"
 TMPDIR=${TMPDIR:-/tmp}
+MYTMPDIR=`mktemp -d "$TMPDIR/$PROGRAM.XXXXXX"`
+TMPDIR=$MYTMPDIR
 TMPFILE=`mktemp "$TMPDIR/$PROGRAM.XXXXXX"` # Create a place to store our work's progress
 TMPLIST=`mktemp "$TMPDIR/$PROGRAM.submodules.XXXXXX"`
+TMP_UNPACK_FOLDER=`mktemp -d "$TMPDIR/$PROGRAM.tmp_unpack_folder.XXXXXX"`
 TOARCHIVE=`mktemp "$TMPDIR/$PROGRAM.toarchive.XXXXXX"`
 OUT_FILE=$OLD_PWD # assume "this directory" without a name change by default
 
@@ -286,11 +287,14 @@ if [ $SEPARATE -eq 0 -o "-" == "$OUT_FILE" ]; then
             $TARCMD --concatenate -f "$superfile" "$file" && rm -f "$file"
         done
     elif [ $FORMAT == 'zip' ]; then
+        # unpack all zip files, then re-pack
+        # unfortunately, more intelligent options don't work:
+        # zipmerge is broken (kills the x bit of directories), and zip --grow does not unpack input zipfiles.
+        cd $TMP_UNPACK_FOLDER
         sed -e '1d' $TMPFILE | while read file; do
-            # zip incorrectly stores the full path, so cd and then grow
-            cd `dirname "$file"`
-            zip -g "$superfile" `basename "$file"` && rm -f "$file"
+            unzip -q "$file" && rm -f "$file"
         done
+        zip --quiet --recurse-paths "$superfile" .
         cd "$OLD_PWD"
     fi
 
