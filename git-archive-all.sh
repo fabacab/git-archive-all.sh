@@ -47,10 +47,7 @@ OLD_IFS=$IFS
 IFS="$(printf '\n \t')"
 
 function cleanup () {
-    rm -f $TMPFILE
-    rm -f $TMPLIST
-    rm -rf $TMP_UNPACK_FOLDER
-    rm -f $TOARCHIVE
+    rm -rf $MYTMPDIR
     IFS="$OLD_IFS"
 }
 
@@ -189,6 +186,8 @@ done
 
 OLD_PWD="`pwd`"
 TMPDIR=${TMPDIR:-/tmp}
+MYTMPDIR=`mktemp -d "$TMPDIR/$PROGRAM.XXXXXX"`
+TMPDIR=$MYTMPDIR
 TMPFILE=`mktemp "$TMPDIR/$PROGRAM.XXXXXX"` # Create a place to store our work's progress
 TMPLIST=`mktemp "$TMPDIR/$PROGRAM.submodules.XXXXXX"`
 TMP_UNPACK_FOLDER=`mktemp -d "$TMPDIR/$PROGRAM.tmp_unpack_folder.XXXXXX"`
@@ -296,6 +295,7 @@ if [ $SEPARATE -eq 0 -o "-" == "$OUT_FILE" ]; then
             unzip -q "$file" && rm -f "$file"
         done
         zip --quiet --recurse-paths "$superfile" .
+        cd "$OLD_PWD"
     fi
 
     echo "$superfile" >| $TMPFILE # clobber on purpose
