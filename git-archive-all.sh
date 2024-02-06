@@ -115,6 +115,7 @@ VERBOSE=0
 
 TARCMD=`command -v gtar || command -v gnutar || command -v tar`
 FORMAT=tar
+FORMAT_=tar # Format in processing
 PREFIX=
 TREEISH=HEAD
 ARCHIVE_OPTS=
@@ -134,6 +135,9 @@ while test $# -gt 0; do
         --format )
             shift
             FORMAT="$1"
+            if [ "${FORMAT}" == "zip" ]; then
+                FORMAT_="zip"
+            fi
             shift
             ;;
 
@@ -202,7 +206,7 @@ if [ ! -z "$1" ]; then
 fi
 
 # Validate parameters; error early, error often.
-if [ "-" == "$OUT_FILE" -o $SEPARATE -ne 1 ] && [ "$FORMAT" == "tar" -a `$TARCMD --help | grep -q -- "--concatenate"; echo $?` -ne 0 ]; then
+if [ "-" == "$OUT_FILE" -o $SEPARATE -ne 1 ] && [ "$FORMAT_" == "tar" -a `$TARCMD --help | grep -q -- "--concatenate"; echo $?` -ne 0 ]; then
     echo "Your 'tar' does not support the '--concatenate' option, which we need"
     echo "to produce a single tarfile. Either install a compatible tar (such as"
     echo "gnutar), or invoke $PROGRAM with the '--separate' option."
@@ -220,12 +224,12 @@ fi
 if [ $VERBOSE -eq 1 ]; then
     echo -n "creating superproject archive..."
 fi
-rm -f $TMPDIR/$(basename "$(pwd)").$FORMAT
-git archive --format=$FORMAT --prefix="$PREFIX" $ARCHIVE_OPTS $TREEISH > $TMPDIR/$(basename "$(pwd)").$FORMAT
+rm -f $TMPDIR/$(basename "$(pwd)").$FORMAT_
+git archive --format=$FORMAT_ --prefix="$PREFIX" $ARCHIVE_OPTS $TREEISH > $TMPDIR/$(basename "$(pwd)").$FORMAT_
 if [ $VERBOSE -eq 1 ]; then
     echo "done"
 fi
-echo $TMPDIR/$(basename "$(pwd)").$FORMAT >| $TMPFILE # clobber on purpose
+echo $TMPDIR/$(basename "$(pwd)").$FORMAT_ >| $TMPFILE # clobber on purpose
 superfile=`head -n 1 $TMPFILE`
 
 if [ $VERBOSE -eq 1 ]; then
@@ -253,13 +257,13 @@ git submodule >>"$TMPLIST"
 while read path; do
     TREEISH=$(grep "^ .*${path%/} " "$TMPLIST" | cut -d ' ' -f 2) # git submodule does not list trailing slashes in $path
     cd "$path"
-    rm -f "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
-    git archive --format=$FORMAT --prefix="${PREFIX}$path" $ARCHIVE_OPTS ${TREEISH:-HEAD} > "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
-    if [ $FORMAT == 'zip' ]; then
+    rm -f "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT_
+    git archive --format=$FORMAT_ --prefix="${PREFIX}$path" $ARCHIVE_OPTS ${TREEISH:-HEAD} > "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT_
+    if [ $FORMAT_ == 'zip' ]; then
         # delete the empty directory entry; zipped submodules won't unzip if we don't do this
         zip -d "$(tail -n 1 $TMPFILE)" "${PREFIX}${path%/}" >/dev/null 2>&1 || true # remove trailing '/'
     fi
-    echo "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT >> $TMPFILE
+    echo "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT_ >> $TMPFILE
     cd "$OLD_PWD"
 done < $TOARCHIVE
 if [ $VERBOSE -eq 1 ]; then
@@ -271,20 +275,19 @@ if [ $VERBOSE -eq 1 ]; then
 fi
 # Concatenate archives into a super-archive.
 if [ $SEPARATE -eq 0 -o "-" == "$OUT_FILE" ]; then
-    if [ $FORMAT == 'tar.gz' ]; then
-        gunzip $superfile
-        superfile=${superfile:0: -3} # Remove '.gz'
-        sed -e '1d' $TMPFILE | while read file; do
-            gunzip $file
-            file=${file:0: -3}
-            $TARCMD --concatenate -f "$superfile" "$file" && rm -f "$file"
-        done
-        gzip $superfile
-        superfile=$superfile.gz
-    elif [ $FORMAT == 'tar' ]; then
+    cmd=$(git config --get "tar.$FORMAT.command" || true)
+    if [ $FORMAT_ == 'tar' ]; then
         sed -e '1d' $TMPFILE | while read file; do
             $TARCMD --concatenate -f "$superfile" "$file" && rm -f "$file"
         done
+
+        if [ "${FORMAT}" != "tar" -a -n "$cmd" ]; then
+            $cmd < "$superfile" > "${superfile%.tar}.${FORMAT}" && rm -f "$superfile"
+            superfile="${superfile%.tar}.${FORMAT}"
+        elif [ $FORMAT == 'tar.gz' ]; then
+            gzip $superfile
+            superfile="$superfile.gz"
+        fi
     elif [ $FORMAT == 'zip' ]; then
         sed -e '1d' $TMPFILE | while read file; do
             # zip incorrectly stores the full path, so cd and then grow
