@@ -271,7 +271,21 @@ if [ $VERBOSE -eq 1 ]; then
 fi
 # Concatenate archives into a super-archive.
 if [ $SEPARATE -eq 0 -o "-" == "$OUT_FILE" ]; then
-    if [ $FORMAT == 'tar.gz' ]; then
+    cmd=$(git config --get "tar.$FORMAT.command" || true)
+    if [ $FORMAT == 'tar' ]; then
+        sed -e '1d' $TMPFILE | while read file; do
+            $TARCMD --concatenate -f "$superfile" "$file" && rm -f "$file"
+        done
+    elif [ -n "$cmd" ]; then
+        superfile_=${superfile%.$FORMAT}.tar
+        $cmd -d < "$superfile" > "$superfile_" && rm -f "$superfile"
+        sed -e '1d' $TMPFILE | while read file; do
+            file_=${file%.$FORMAT}.tar
+            $cmd -d < "$file" > "$file_" && rm -f "$file"
+            $TARCMD --concatenate -f "$superfile_" "$file_" && rm -f "$file_"
+        done
+        $cmd < "$superfile_" > "$superfile" && rm -f "$superfile_"
+    elif [ $FORMAT == 'tar.gz' ]; then
         gunzip $superfile
         superfile=${superfile:0: -3} # Remove '.gz'
         sed -e '1d' $TMPFILE | while read file; do
@@ -281,10 +295,6 @@ if [ $SEPARATE -eq 0 -o "-" == "$OUT_FILE" ]; then
         done
         gzip $superfile
         superfile=$superfile.gz
-    elif [ $FORMAT == 'tar' ]; then
-        sed -e '1d' $TMPFILE | while read file; do
-            $TARCMD --concatenate -f "$superfile" "$file" && rm -f "$file"
-        done
     elif [ $FORMAT == 'zip' ]; then
         sed -e '1d' $TMPFILE | while read file; do
             # zip incorrectly stores the full path, so cd and then grow
