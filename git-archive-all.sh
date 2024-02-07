@@ -249,9 +249,9 @@ fi
 if [ $VERBOSE -eq 1 ]; then
     echo -n "archiving submodules..."
 fi
-git submodule >>"$TMPLIST"
+git submodule status --recursive --cached >> "$TMPLIST"
 while read path; do
-    TREEISH=$(grep "^ .*${path%/} " "$TMPLIST" | cut -d ' ' -f 2) # git submodule does not list trailing slashes in $path
+    TREEISH=$(sed -nr -e 's@^[ +-]@@' -e 's@ +\(.*\)$@@' -e 's@([^ ]+) +'"${path%/}"'$@\1@ p' "$TMPLIST") # git submodule does not list trailing slashes in $path
     cd "$path"
     rm -f "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
     git archive --format=$FORMAT --prefix="${PREFIX}$path" $ARCHIVE_OPTS ${TREEISH:-HEAD} > "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
