@@ -257,17 +257,40 @@ git submodule status --recursive --cached >> "$TMPLIST"
 while read path; do
     # git submodule does not list trailing slashes in $path. Remove it in $TREEISH search.
     TREEISH=$(git ls-tree "${TOP_TREEISH}" "${path%/}" | awk '{ print $3 }')
+
+    if [ -z "$TREEISH" ]; then
+        # It is not top repo's direct submodule.
+        ppath=${path%/}; ppath=${ppath%/*}
+        pathbase=${path%/}; pathbase=${pathbase##*/}
+        while [ -n "${ppath}" ]; do
+            PARENT_TREEISH=$(sed -nr -e 's@^[ +-]@@' -e 's@ +\(.*\)$@@' -e 's@([^ ]+) +'"${ppath}"'$@\1@ p' "$TMPLIST" | tail -n1)
+            if [ -n "$PARENT_TREEISH" ]; then
+                TREEISH=$(git -C "${ppath}" ls-tree "${PARENT_TREEISH}" "${pathbase}" | awk '{ print $3 }')
+                if [ -n "${TREEISH}" ]; then
+                    break;
+                fi
+            fi
+            if [ ${ppath} == ${ppath%/*} ]; then
+                break
+            else
+                pathbase="${ppath##*/}/${pathbase}"
+                ppath=${ppath%/*}
+            fi
+        done
+    fi
+
     if [ -z "$TREEISH" ]; then
         if [ "$TOP_TREEISH_HASH" != "$TOP_HEAD_HASH" ]; then
             echo >&2 -e "\e[33;1mWarning:\e[22m Submodule \"${path%/}\" hash for top repo's ${TOP_TREEISH} was not obtained. Use the commit for top repo's HEAD.\e[m"
         fi
 
-        TREEISH=$(sed -nr -e 's@^[ +-]@@' -e 's@ +\(.*\)$@@' -e 's@([^ ]+) +'"${path%/}"'$@\1@ p' "$TMPLIST")
+        TREEISH=$(sed -nr -e 's@^[ +-]@@' -e 's@ +\(.*\)$@@' -e 's@([^ ]+) +'"${path%/}"'$@\1@ p' "$TMPLIST" | tail -n1)
         if [ -z "$TREEISH" ]; then
             echo >&2 -e "\e[33;1mWarning:\e[22m Submodule \"${path%/}\" hash for top repo's HEAD was not obtained. Use the commit for the submodule's HEAD.\e[m"
             TREEISH=HEAD
         fi
     fi
+    echo " ${TREEISH} ${path%/}" >> "${TMPLIST}" # Update the chosen commit
     echo >&2 "Submodule \"${path%/}\" commit for top repo's ${TOP_TREEISH}: ${TREEISH:-HEAD} ($(git -C ${path} name-rev --name-only "${TREEISH}"))"
 
     cd "$path"
