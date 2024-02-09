@@ -249,9 +249,40 @@ fi
 if [ $VERBOSE -eq 1 ]; then
     echo -n "archiving submodules..."
 fi
-git submodule >>"$TMPLIST"
+
+TOP_TREEISH=$TREEISH
+TOP_TREEISH_HASH=$(git rev-parse "$TOP_TREEISH")
+TOP_HEAD_HASH=$(git rev-parse HEAD)
+git submodule status --recursive --cached >> "$TMPLIST"
 while read path; do
-    TREEISH=$(grep "^ .*${path%/} " "$TMPLIST" | cut -d ' ' -f 2) # git submodule does not list trailing slashes in $path
+    # git submodule does not list trailing slashes in $path. Remove it in $TREEISH search.
+    TREEISH=$(git ls-tree "${TOP_TREEISH}" "${path%/}" | awk '{ print $3 }')
+
+    if [ -z "$TREEISH" ]; then
+        # It is not top repo's direct submodule.
+        ppath=$(realpath --relative-base="${PWD}" "$(git -C "${path%/*/}" rev-parse --show-toplevel)")
+        pathbase=$(realpath --relative-base="${ppath}" "${path%/}")
+
+        PARENT_TREEISH=$(sed -nr -e 's@^[ +-]@@' -e 's@ +\(.*\)$@@' -e 's@([^ ]+) +'"${ppath}"'$@\1@ p' "$TMPLIST" | tail -n1)
+        if [ -n "$PARENT_TREEISH" ]; then
+            TREEISH=$(git -C "${ppath}" ls-tree "${PARENT_TREEISH}" "${pathbase}" | awk '{ print $3 }')
+        fi
+    fi
+
+    if [ -z "$TREEISH" ]; then
+        if [ "$TOP_TREEISH_HASH" != "$TOP_HEAD_HASH" ]; then
+            echo >&2 -e "\e[33;1mWarning:\e[22m Submodule \"${path%/}\" hash for top repo's ${TOP_TREEISH} was not obtained. Use the commit for top repo's HEAD.\e[m"
+        fi
+
+        TREEISH=$(sed -nr -e 's@^[ +-]@@' -e 's@ +\(.*\)$@@' -e 's@([^ ]+) +'"${path%/}"'$@\1@ p' "$TMPLIST" | tail -n1)
+        if [ -z "$TREEISH" ]; then
+            echo >&2 -e "\e[33;1mWarning:\e[22m Submodule \"${path%/}\" hash for top repo's HEAD was not obtained. Use the commit for the submodule's HEAD.\e[m"
+            TREEISH=HEAD
+        fi
+    fi
+    echo " ${TREEISH} ${path%/}" >> "${TMPLIST}" # Update the chosen commit
+    echo >&2 "Submodule \"${path%/}\" commit for top repo's ${TOP_TREEISH}: ${TREEISH:-HEAD} ($(git -C ${path} name-rev --name-only "${TREEISH}"))"
+
     cd "$path"
     rm -f "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
     git archive --format=$FORMAT --prefix="${PREFIX}$path" $ARCHIVE_OPTS ${TREEISH:-HEAD} > "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
