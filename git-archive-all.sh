@@ -260,23 +260,13 @@ while read path; do
 
     if [ -z "$TREEISH" ]; then
         # It is not top repo's direct submodule.
-        ppath=${path%/}; ppath=${ppath%/*}
-        pathbase=${path%/}; pathbase=${pathbase##*/}
-        while [ -n "${ppath}" ]; do
-            PARENT_TREEISH=$(sed -nr -e 's@^[ +-]@@' -e 's@ +\(.*\)$@@' -e 's@([^ ]+) +'"${ppath}"'$@\1@ p' "$TMPLIST" | tail -n1)
-            if [ -n "$PARENT_TREEISH" ]; then
-                TREEISH=$(git -C "${ppath}" ls-tree "${PARENT_TREEISH}" "${pathbase}" | awk '{ print $3 }')
-                if [ -n "${TREEISH}" ]; then
-                    break;
-                fi
-            fi
-            if [ ${ppath} == ${ppath%/*} ]; then
-                break
-            else
-                pathbase="${ppath##*/}/${pathbase}"
-                ppath=${ppath%/*}
-            fi
-        done
+        ppath=$(realpath --relative-base="${PWD}" "$(git -C "${path%/*/}" rev-parse --show-toplevel)")
+        pathbase=$(realpath --relative-base="${ppath}" "${path%/}")
+
+        PARENT_TREEISH=$(sed -nr -e 's@^[ +-]@@' -e 's@ +\(.*\)$@@' -e 's@([^ ]+) +'"${ppath}"'$@\1@ p' "$TMPLIST" | tail -n1)
+        if [ -n "$PARENT_TREEISH" ]; then
+            TREEISH=$(git -C "${ppath}" ls-tree "${PARENT_TREEISH}" "${pathbase}" | awk '{ print $3 }')
+        fi
     fi
 
     if [ -z "$TREEISH" ]; then
